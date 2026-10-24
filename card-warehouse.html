@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PTCG 遊戲系統 - 卡牌倉庫</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #121218; color: #e0e0e0;
+      font-family: Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    /* 頂部導覽列 */
+    .navbar {
+      background: #1a1a24; border-bottom: 2px solid #3d3d4e;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 24px; height: 60px; position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 1.2rem; font-weight: bold; color: #ffd700; letter-spacing: 1px; }
+    .nav-tabs { display: flex; gap: 8px; height: 100%; }
+    .nav-btn {
+      background: transparent; border: none; color: #a0a0b0;
+      font-size: 0.95rem; font-weight: bold; padding: 0 20px;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      transition: all 0.2s ease; border-bottom: 3px solid transparent; text-decoration: none;
+    }
+    .nav-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.03); }
+    .nav-btn.active { color: #ffd700; border-bottom-color: #ffd700; background: rgba(255, 215, 0, 0.05); }
+
+    /* 主區域 */
+    .main-content { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+    
+    .warehouse-header {
+      background: #1e1e26; border: 2px solid #3d3d4e; border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 24px;
+    }
+    .warehouse-title h2 { color: #ffd700; font-size: 1.5rem; }
+    .warehouse-title p { color: #aaa; font-size: 0.9rem; margin-top: 4px; }
+
+    /* 分頁切換 */
+    .sub-tabs { display: flex; gap: 12px; margin-top: 16px; border-bottom: 1px solid #3d3d4e; padding-bottom: 12px; align-items: center; }
+    .sub-tab-btn {
+      background: #2a2a36; border: 1px solid #3d3d4e; color: #a0a0b0;
+      padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;
+    }
+    .sub-tab-btn.active { background: #ffd700; color: #121218; border-color: #ffd700; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* 通用控制項 */
+    .warehouse-tools { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .filter-select, .text-input {
+      background: rgba(0,0,0,0.4); border: 1px solid #444; border-radius: 6px;
+      padding: 8px 12px; color: #fff; outline: none; font-size: 0.95rem;
+    }
+    .btn-action {
+      background: #2ed573; color: #121218; border: none; padding: 8px 16px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;
+    }
+    .btn-action:hover { background: #55efc4; }
+    .btn-clear-all {
+      background: #ff4757; color: white; border: none; padding: 8px 16px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;
+    }
+    .btn-clear-all:hover { background: #ff6b81; }
+
+    /* 單卡庫網格區 */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+    .card-item {
+      background: #1a1a24; border: 2px solid #3d3d4e; border-radius: 10px;
+      padding: 10px; display: flex; flex-direction: column; align-items: center;
+      position: relative; transition: transform 0.2s, border-color 0.2s;
+    }
+    .card-item:hover { transform: translateY(-3px); border-color: #ffd700; }
+    .card-badge {
+      position: absolute; top: 8px; left: 8px; font-size: 0.65rem; font-weight: bold;
+      padding: 2px 5px; border-radius: 4px; text-transform: uppercase;
+    }
+    .badge-pokemon { background: #ff4757; color: #fff; }
+    .badge-trainer { background: #1e90ff; color: #fff; }
+    .badge-energy { background: #2ed573; color: #121218; }
+
+    .card-img-wrapper {
+      width: 100%; aspect-ratio: 63 / 88; border-radius: 6px;
+      overflow: hidden; background: #000; margin: 14px 0 8px 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+    .card-name { font-weight: bold; font-size: 0.9rem; color: #fff; text-align: center; margin-bottom: 8px; }
+
+    /* 牌組檔案總覽區 */
+    .deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .deck-folder-card {
+      background: #1a1a24; border: 2px solid #3d3d4e; border-radius: 12px; padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .deck-folder-card:hover { border-color: #00d2ff; }
+    .deck-folder-header { display: flex; justify-content: space-between; align-items: center; }
+    .deck-folder-title { font-size: 1.15rem; font-weight: bold; color: #00d2ff; }
+    .deck-folder-stats { font-size: 0.85rem; color: #aaa; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; }
+    
+    .btn-enter-deck {
+      background: #00d2ff; color: #121218; border: none; padding: 10px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; text-align: center; margin-top: 8px; transition: 0.2s;
+    }
+    .btn-enter-deck:hover { background: #70a1ff; }
+
+    /* =========================================================
+       左右雙欄編輯介面 (進入牌組檔案後)
+       ========================================================= */
+    .deck-editor-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr; /* 左右各占 50% 均等分配 */
+      gap: 20px;
+      align-items: start;
+    }
+
+    .editor-column {
+      background: #1a1a24;
+      border: 2px solid #3d3d4e;
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 600px;
+    }
+
+    .editor-column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #2a2a36;
+      padding-bottom: 12px;
+    }
+    .editor-column-title { font-size: 1.1rem; font-weight: bold; color: #ffd700; }
+
+    /* 按鈕與數量調控 */
+    .card-action-bar { display: flex; gap: 6px; width: 100%; margin-top: 4px; }
+    .btn-qty-control {
+      flex: 1; padding: 6px 0; border: none; border-radius: 4px; font-weight: bold;
+      cursor: pointer; transition: 0.2s; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+    }
+    .btn-qty-add { background: #2ed573; color: #121218; }
+    .btn-qty-add:hover { background: #55efc4; }
+    .btn-qty-sub { background: #ff4757; color: white; }
+    .btn-qty-sub:hover { background: #ff6b81; }
+    .btn-rename { background: #ffd700; color: #121218; }
+    .btn-rename:hover { background: #ffeaa7; }
+
+    /* 右側牌組卡牌條目清單 */
+    /* 右側牌組卡牌網格清單 (改為網格卡片佈局) */
+    .deck-card-list { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); 
+      gap: 16px; 
+      max-height: 550px; 
+      overflow-y: auto; 
+      padding-right: 4px; 
+    }
+    .deck-card-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #242432; border: 1px solid #3d3d4e; border-left: 4px solid #00d2ff;
+      border-radius: 6px; padding: 10px 14px;
+    }
+    .deck-card-info { display: flex; align-items: center; gap: 10px; font-weight: bold; }
+    .deck-card-qty { background: #00d2ff; color: #121218; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; }
+
+    .empty-msg { grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: #1e1e26; border: 2px dashed #3d3d4e; border-radius: 12px; color: #888; }
+
+    /* Modal 彈出視窗 */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-content {
+      background: #1e1e26; border: 2px solid #3d3d4e; border-radius: 12px;
+      padding: 24px; width: 90%; max-width: 450px; display: flex; flex-direction: column; gap: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部導覽列 -->
+  <nav class="navbar">
+  <div class="nav-logo">PTCG SIMULATOR</div>
+  <div class="nav-tabs">
+    <a href="index.html?tab=battle" class="nav-btn">⚔️ 對戰</a>
+    <a href="index.html?tab=add-card" class="nav-btn">➕ 新增卡牌</a>
+    <a href="card-warehouse.html" class="nav-btn active">📦 卡牌倉庫</a>
+  </div>
+</nav>
+
+  <main class="main-content">
+    <div class="warehouse-header">
+      <div class="warehouse-title">
+        <h2>卡牌倉庫 (記事本資料庫)</h2>
+        <p>在此管理單卡庫，或以檔案型態建立與編輯專屬對戰牌組。</p>
+      </div>
+
+      <!-- 主分頁頁籤 -->
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" onclick="switchWarehouseTab('cards', this)">🎴 卡牌單卡庫</button>
+        <button class="sub-tab-btn" onclick="switchWarehouseTab('decks', this)">📁 組合牌組庫 (檔案)</button>
+        <span style="flex:1;"></span>
+        <button class="btn-action" onclick="exportAllData()" title="把所有卡牌與牌組打包成一個檔案下載，可傳到別的裝置匯入">📤 匯出資料</button>
+        <button class="btn-action" style="background:#00d2ff;" onclick="document.getElementById('importFileInput').click()" title="讀取從別的裝置匯出的檔案，把卡牌與牌組加進來">📥 匯入資料</button>
+        <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importAllData(event)">
+      </div>
+    </div>
+
+    <!-- 1. 單卡庫頁籤 -->
+    <div id="tab-cards" class="tab-content active">
+      <div class="warehouse-tools">
+        <div>
+          <label>類型篩選：</label>
+          <select id="typeFilter" class="filter-select" onchange="renderWarehouseCards()">
+            <option value="all">所有類型</option>
+            <option value="pokemon">寶可夢</option>
+            <option value="trainer">訓練家</option>
+            <option value="energy">能量卡</option>
+          </select>
+        </div>
+        <button class="btn-clear-all" onclick="clearAllCards()">清空單卡庫</button>
+      </div>
+      <div id="cardGrid" class="card-grid"></div>
+    </div>
+
+    <!-- 2. 組合牌組庫 (檔案總覽) -->
+    <div id="tab-decks" class="tab-content">
+      <div class="warehouse-tools">
+        <h3>牌組檔案庫</h3>
+        <button class="btn-action" onclick="openCreateDeckModal()">＋ 建立新牌組檔案</button>
+      </div>
+      <div id="deckFolderGrid" class="deck-grid"></div>
+    </div>
+
+    <!-- 3. 牌組檔案內容 (進入檔案後的左右雙欄視窗) -->
+    <div id="tab-deck-editor" class="tab-content">
+      <div class="warehouse-tools">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="sub-tab-btn" onclick="exitDeckEditor()">⬅️ 返回牌組檔案庫</button>
+          <h3 id="currentEditingDeckTitle" style="color:#00d2ff;">編輯牌組檔案</h3>
+        </div>
+        <button class="btn-action" onclick="saveCurrentDeck()">💾 儲存變更並離開</button>
+      </div>
+
+      <!-- 左右兩部分劃分 -->
+      <div class="deck-editor-container">
+        
+        <!-- 左半部：卡牌清單庫 (可點擊新增/減少) -->
+        <div class="editor-column">
+          <div class="editor-column-header">
+            <span class="editor-column-title">🎴 左側：卡牌清單庫</span>
+            <span style="font-size:0.85rem; color:#aaa;">點選加減調整張數</span>
+          </div>
+          <div id="editorCardPickerGrid" class="card-grid"></div>
+        </div>
+
+        <!-- 右半部：當前牌組內容 -->
+        <div class="editor-column" style="border-color: #00d2ff;">
+          <div class="editor-column-header">
+            <span class="editor-column-title" style="color:#00d2ff;">📁 右側：當前牌組內容</span>
+            <span id="deckCardCountBadge" class="deck-folder-stats">0 / 60 張</span>
+          </div>
+          <div id="deckCardsList" class="deck-card-list"></div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 更改卡牌名稱 Modal -->
+  <div id="renameCardModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3>更改卡牌名稱</h3>
+      <div>
+        <label style="display:block; margin-bottom:6px;">新的卡牌名稱：</label>
+        <input type="text" id="renameCardInput" class="text-input" style="width:100%;" onkeydown="if(event.key==='Enter') saveRenameCard(); if(event.key==='Escape') closeRenameModal();">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button class="btn-action" style="flex:1;" onclick="saveRenameCard()">儲存</button>
+        <button class="btn-clear-all" style="flex:1;" onclick="closeRenameModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建牌組檔案 Modal -->
+  <div id="createDeckModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3>建立新牌組檔案</h3>
+      <div>
+        <label style="display:block; margin-bottom:6px;">牌組名稱：</label>
+        <input type="text" id="deckNameInput" class="text-input" placeholder="例如：皮卡丘 EX 快速組" style="width:100%;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px;">卡牌張數上限：</label>
+        <input type="number" id="deckLimitInput" class="text-input" value="60" style="width:100%;">
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button class="btn-action" style="flex:1;" onclick="createDeckFile()">建立檔案</button>
+        <button class="btn-clear-all" style="flex:1;" onclick="closeCreateDeckModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== IndexedDB 卡牌資料庫 (與 index.html 共用同一個資料庫) =====
+    const DB_NAME = "ptcg_db", CARD_STORE = "cards";
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(CARD_STORE, { keyPath: "id" });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function dbGetAllCards() {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const req = db.transaction(CARD_STORE, "readonly").objectStore(CARD_STORE).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function dbPutCard(card) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(CARD_STORE, "readwrite");
+        tx.objectStore(CARD_STORE).put(card);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function dbDeleteCard(id) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(CARD_STORE, "readwrite");
+        tx.objectStore(CARD_STORE).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function dbClearCards() {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(CARD_STORE, "readwrite");
+        tx.objectStore(CARD_STORE).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    // 舊版卡牌存在 localStorage，一次性搬到 IndexedDB
+    async function migrateOldCards() {
+      try {
+        const old = JSON.parse(localStorage.getItem("custom_cards"));
+        if (Array.isArray(old) && old.length) {
+          for (const c of old) await dbPutCard(c);
+        }
+        localStorage.removeItem("custom_cards");
+      } catch (e) { console.warn("舊資料搬移失敗", e); }
+    }
+
+    let cardCache = []; // 目前卡牌庫快取 (供牌組編輯器查詢)
+    let currentEditingDeckId = null;
+    let currentEditingDeckMaxLimit = 60; // 修正1: 記住目前編輯牌組的實際上限
+    let editingDeckCardsMap = new Map(); // cardId -> { card, count }
+
+    // 主分頁切換
+    function switchWarehouseTab(tabName, btn) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.sub-tab-btn').forEach(el => el.classList.remove('active'));
+
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      if (btn) btn.classList.add('active');
+
+      if (tabName === 'cards') renderWarehouseCards();
+      if (tabName === 'decks') renderWarehouseDecks();
+    }
+
+    // 1. 渲染單卡庫
+    async function renderWarehouseCards() {
+      const cardGrid = document.getElementById("cardGrid");
+      const filterType = document.getElementById("typeFilter").value;
+      const storedCards = await dbGetAllCards();
+
+      cardGrid.innerHTML = "";
+      const filteredCards = storedCards.filter(card => filterType === "all" || card.type === filterType);
+
+      if (filteredCards.length === 0) {
+        cardGrid.innerHTML = `<div class="empty-msg"><h3>單卡庫無卡牌</h3><p>可前往「新增卡牌」頁面建立單卡資料。</p></div>`;
+        return;
+      }
+
+      filteredCards.forEach(card => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "card-item";
+
+        let typeBadgeClass = "badge-pokemon", typeName = "寶可夢";
+        if (card.type === "trainer") { typeBadgeClass = "badge-trainer"; typeName = "訓練家"; }
+        if (card.type === "energy") { typeBadgeClass = "badge-energy"; typeName = "能量"; }
+
+        cardEl.innerHTML = `
+          <span class="card-badge ${typeBadgeClass}">${typeName}</span>
+          <div class="card-img-wrapper">
+            <img src="${card.image}" alt="${card.name}" onerror="this.src='https://via.placeholder.com/150x210?text=無圖片'">
+          </div>
+          <div class="card-name">${card.name}</div>
+          <div class="card-action-bar">
+            <button class="btn-qty-control btn-rename" onclick="openRenameModal('${card.id}')">✏️ 改名</button>
+            <button class="btn-qty-control btn-qty-sub" onclick="deleteCard('${card.id}')">刪除</button>
+          </div>
+        `;
+        cardGrid.appendChild(cardEl);
+      });
+    }
+
+    // 2. 渲染牌組檔案庫 (檔案卡片)
+    function renderWarehouseDecks() {
+      const deckGrid = document.getElementById("deckFolderGrid");
+      const storedDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+
+      deckGrid.innerHTML = "";
+
+      if (storedDecks.length === 0) {
+        deckGrid.innerHTML = `<div class="empty-msg"><h3>尚無牌組檔案</h3><p>點擊右上角「＋ 建立新牌組檔案」開始建檔。</p></div>`;
+        return;
+      }
+
+      storedDecks.forEach((deck) => {
+        const totalCards = (deck.cards || []).reduce((sum, item) => sum + (item.count || 1), 0);
+        const deckEl = document.createElement("div");
+        deckEl.className = "deck-folder-card";
+
+        deckEl.innerHTML = `
+          <div class="deck-folder-header">
+            <div class="deck-folder-title">📁 ${deck.name}</div>
+            <div class="deck-folder-stats">${totalCards} / ${deck.maxLimit || 60} 張</div>
+          </div>
+          <button class="btn-enter-deck" onclick="openDeckEditor('${deck.id}')">📂 進入牌組檔案內容</button>
+          <button class="btn-clear-all" style="font-size:0.8rem; padding:4px;" onclick="deleteDeckFile('${deck.id}')">刪除檔案</button>
+        `;
+        deckGrid.appendChild(deckEl);
+      });
+    }
+
+    // Modal 新建檔案邏輯
+    function openCreateDeckModal() {
+      document.getElementById("deckNameInput").value = "";
+      document.getElementById("createDeckModal").style.display = "flex";
+    }
+    function closeCreateDeckModal() {
+      document.getElementById("createDeckModal").style.display = "none";
+    }
+
+    function createDeckFile() {
+      const name = document.getElementById("deckNameInput").value.trim();
+      const limit = parseInt(document.getElementById("deckLimitInput").value) || 60;
+      if (!name) { alert("請輸入牌組檔案名稱！"); return; }
+
+      const newDeck = {
+        id: "deck_" + Date.now(),
+        name: name,
+        maxLimit: limit,
+        cards: []
+      };
+
+      let storedDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+      storedDecks.push(newDeck);
+      localStorage.setItem("custom_decks", JSON.stringify(storedDecks));
+
+      closeCreateDeckModal();
+      renderWarehouseDecks();
+    }
+
+    // 進入牌組檔案內部編輯 (左右雙欄模式)
+    async function openDeckEditor(deckId) {
+      const storedDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+      const deck = storedDecks.find(d => d.id === deckId);
+      if (!deck) return;
+
+      currentEditingDeckId = deckId;
+      currentEditingDeckMaxLimit = deck.maxLimit || 60; // 修正1: 讀取此牌組真正的上限
+      document.getElementById("currentEditingDeckTitle").innerText = `📁 編輯檔案：${deck.name}`;
+
+      // 初始化 Map：牌組只存 {id, count}，圖片等資料從卡牌庫查詢
+      cardCache = await dbGetAllCards();
+      editingDeckCardsMap.clear();
+      (deck.cards || []).forEach(item => {
+        const full = cardCache.find(c => c.id === item.id) || (item.image ? item : null); // 相容舊版牌組
+        if (full) editingDeckCardsMap.set(item.id, { card: full, count: item.count || 1 });
+      });
+
+      // 切換視窗
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-deck-editor').classList.add('active');
+
+      renderLeftCardPicker();
+      renderRightDeckList();
+    }
+
+    // 渲染左側：卡牌清單庫 (配有加一張/減一張)
+    function renderLeftCardPicker() {
+      const pickerGrid = document.getElementById("editorCardPickerGrid");
+      const storedCards = cardCache;
+      pickerGrid.innerHTML = "";
+
+      if (storedCards.length === 0) {
+        pickerGrid.innerHTML = `<div class="empty-msg"><p>卡牌倉庫中目前沒有任何卡牌可選。</p></div>`;
+        return;
+      }
+
+      storedCards.forEach(card => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "card-item";
+
+        cardEl.innerHTML = `
+          <div class="card-img-wrapper">
+            <img src="${card.image}" alt="${card.name}">
+          </div>
+          <div class="card-name">${card.name}</div>
+          <div class="card-action-bar">
+            <button class="btn-qty-control btn-qty-add" onclick="adjustCardQty('${card.id}', 1)">加一張</button>
+            <button class="btn-qty-control btn-qty-sub" onclick="adjustCardQty('${card.id}', -1)">減一張</button>
+          </div>
+        `;
+        pickerGrid.appendChild(cardEl);
+      });
+    }
+
+    // 調整卡牌數量 (加一張 / 減一張)
+    function adjustCardQty(cardId, delta) {
+      const card = cardCache.find(c => c.id === cardId);
+
+      // 修正2: 加卡前檢查是否已達牌組上限
+      if (delta > 0) {
+        let currentTotal = 0;
+        editingDeckCardsMap.forEach(item => currentTotal += item.count);
+        if (currentTotal >= currentEditingDeckMaxLimit) {
+          alert(`牌組已達上限 ${currentEditingDeckMaxLimit} 張，無法再新增！`);
+          return;
+        }
+      }
+
+      if (!editingDeckCardsMap.has(cardId)) {
+        if (delta > 0 && card) {
+          editingDeckCardsMap.set(cardId, { card: { ...card }, count: 1 });
+        }
+      } else {
+        const item = editingDeckCardsMap.get(cardId);
+        item.count += delta;
+        if (item.count <= 0) {
+          editingDeckCardsMap.delete(cardId);
+        }
+      }
+
+      renderRightDeckList();
+    }
+
+    // 渲染右側：當前牌組內容
+    // 渲染右側：當前牌組內容 (包含圖片預覽)
+function renderRightDeckList() {
+  const deckList = document.getElementById("deckCardsList");
+  const countBadge = document.getElementById("deckCardCountBadge");
+  deckList.innerHTML = "";
+
+  let totalCount = 0;
+
+  if (editingDeckCardsMap.size === 0) {
+    deckList.innerHTML = `<div class="empty-msg" style="grid-column: 1 / -1;"><p>牌組內目前沒有卡牌<br>點選左側卡牌「加一張」即可加入</p></div>`;
+  } else {
+    editingDeckCardsMap.forEach((item, cardId) => {
+      totalCount += item.count;
+
+      // 類型標籤設定
+      let typeBadgeClass = "badge-pokemon", typeName = "寶可夢";
+      if (item.card.type === "trainer") { typeBadgeClass = "badge-trainer"; typeName = "訓練家"; }
+      if (item.card.type === "energy") { typeBadgeClass = "badge-energy"; typeName = "能量"; }
+
+      const itemEl = document.createElement("div");
+      itemEl.className = "card-item";
+      itemEl.style.borderColor = "#00d2ff"; // 以藍色邊框強調屬於右側當前牌組
+
+      itemEl.innerHTML = `
+        <span class="card-badge ${typeBadgeClass}">${typeName}</span>
+        <!-- 張數顯示標籤 -->
+        <span style="position: absolute; top: 8px; right: 8px; background: #00d2ff; color: #121218; font-weight: bold; font-size: 0.75rem; padding: 2px 7px; border-radius: 10px; z-index: 2;">
+          ${item.count} 張
+        </span>
+        <div class="card-img-wrapper">
+          <img src="${item.card.image}" alt="${item.card.name}" onerror="this.src='https://via.placeholder.com/150x210?text=無圖片'">
+        </div>
+        <div class="card-name">${item.card.name}</div>
+        <div class="card-action-bar">
+          <button class="btn-qty-control btn-qty-add" onclick="adjustCardQty('${cardId}', 1)">＋</button>
+          <button class="btn-qty-control btn-qty-sub" onclick="adjustCardQty('${cardId}', -1)">－</button>
+        </div>
+      `;
+      deckList.appendChild(itemEl);
+    });
+  }
+
+  // 修正1: 顯示這個牌組真正的上限，而不是寫死的 60
+  countBadge.innerText = `${totalCount} / ${currentEditingDeckMaxLimit} 張`;
+}
+
+    // 儲存變更
+    function saveCurrentDeck() {
+      let storedDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+      const deckIndex = storedDecks.findIndex(d => d.id === currentEditingDeckId);
+
+      if (deckIndex !== -1) {
+        const updatedCards = [];
+        editingDeckCardsMap.forEach(item => {
+          updatedCards.push({ id: item.card.id, count: item.count }); // 只存參照，不重複存圖片
+        });
+
+        storedDecks[deckIndex].cards = updatedCards;
+        localStorage.setItem("custom_decks", JSON.stringify(storedDecks));
+      }
+
+      exitDeckEditor();
+    }
+
+    function exitDeckEditor() {
+      currentEditingDeckId = null;
+      editingDeckCardsMap.clear();
+      switchWarehouseTab('decks', document.querySelectorAll('.sub-tab-btn')[1]);
+    }
+
+    // 刪除邏輯
+    // 更改卡牌名稱（牌組只存卡牌 id，所以所有牌組會自動顯示新名稱）
+    let renameTargetId = null;
+
+    async function openRenameModal(cardId) {
+      const cards = await dbGetAllCards();
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+      renameTargetId = cardId;
+      const input = document.getElementById("renameCardInput");
+      input.value = card.name;
+      document.getElementById("renameCardModal").style.display = "flex";
+      input.focus();
+      input.select();
+    }
+
+    function closeRenameModal() {
+      renameTargetId = null;
+      document.getElementById("renameCardModal").style.display = "none";
+    }
+
+    async function saveRenameCard() {
+      const newName = document.getElementById("renameCardInput").value.trim();
+      if (!newName) { alert("請輸入卡牌名稱！"); return; }
+
+      const cards = await dbGetAllCards();
+      const card = cards.find(c => c.id === renameTargetId);
+      if (!card) { closeRenameModal(); return; }
+
+      card.name = newName;
+      try {
+        await dbPutCard(card);
+      } catch (e) {
+        console.error(e);
+        alert("儲存失敗，請稍後再試。");
+        return;
+      }
+      closeRenameModal();
+      renderWarehouseCards();
+    }
+
+    async function deleteCard(cardId) {
+      if (confirm("確定要刪除這張單卡嗎？")) {
+        await dbDeleteCard(cardId);
+        renderWarehouseCards();
+      }
+    }
+
+    function deleteDeckFile(deckId) {
+      if (confirm("確定要刪除此牌組檔案嗎？")) {
+        let storedDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+        storedDecks = storedDecks.filter(d => d.id !== deckId);
+        localStorage.setItem("custom_decks", JSON.stringify(storedDecks));
+        renderWarehouseDecks();
+      }
+    }
+
+    async function clearAllCards() {
+      if (confirm("確定要清空單卡庫嗎？")) {
+        await dbClearCards();
+        renderWarehouseCards();
+      }
+    }
+
+    // 匯出全部資料（卡牌圖片 + 牌組）成一個 JSON 檔，供傳到別的裝置匯入
+    async function exportAllData() {
+      try {
+        const cards = await dbGetAllCards();
+        const decks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+        const payload = {
+          type: "ptcg-backup",
+          exportedAt: new Date().toISOString(),
+          cards, decks
+        };
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const dateStr = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `ptcg-backup-${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error(e);
+        alert("匯出失敗，請稍後再試。");
+      }
+    }
+
+    // 匯入備份檔：卡牌用 id 覆蓋/新增，牌組同樣用 id 比對，避免重複
+    async function importAllData(event) {
+      const file = event.target.files[0];
+      event.target.value = ""; // 清空，允許下次選同一個檔案也能觸發 change
+      if (!file) return;
+
+      let payload;
+      try {
+        const text = await file.text();
+        payload = JSON.parse(text);
+      } catch (e) {
+        alert("這個檔案看起來不是有效的備份檔。");
+        return;
+      }
+      if (!payload || payload.type !== "ptcg-backup" || !Array.isArray(payload.cards)) {
+        alert("這個檔案看起來不是有效的備份檔。");
+        return;
+      }
+
+      const cardCount = payload.cards.length;
+      const deckCount = Array.isArray(payload.decks) ? payload.decks.length : 0;
+      if (!confirm(`即將匯入 ${cardCount} 張卡牌、${deckCount} 個牌組。
+同樣 ID 的卡牌/牌組會被覆蓋，其餘會新增進來。確定要匯入嗎？`)) {
+        return;
+      }
+
+      try {
+        for (const card of payload.cards) {
+          if (card && card.id) await dbPutCard(card);
+        }
+        if (Array.isArray(payload.decks)) {
+          let existingDecks = JSON.parse(localStorage.getItem("custom_decks")) || [];
+          const deckMap = new Map(existingDecks.map(d => [d.id, d]));
+          payload.decks.forEach(d => { if (d && d.id) deckMap.set(d.id, d); });
+          localStorage.setItem("custom_decks", JSON.stringify(Array.from(deckMap.values())));
+        }
+        alert(`匯入完成！已匯入 ${cardCount} 張卡牌、${deckCount} 個牌組。`);
+        renderWarehouseCards();
+      } catch (e) {
+        console.error(e);
+        alert("匯入過程發生錯誤，部分資料可能未完成匯入。");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => { await migrateOldCards(); renderWarehouseCards(); });
+  </script>
+</body>
+</html>
